@@ -2,7 +2,11 @@
 //add an option for selecting the speed range we want
 //make the set rpm fit into the resolution of the controller
 
-
+final int LOWER_RPM = 125;
+final int UPPER_RPM = 5000;
+final int NUM_STEPS = 1024;
+final float STEP_SIZE = (float(UPPER_RPM) - float(LOWER_RPM)) / NUM_STEPS;
+int [] RPM_ARRAY = new int[NUM_STEPS];
 
 //Library Imports
 import controlP5.*;
@@ -21,10 +25,10 @@ ControlTimer rpm_timer;
 
 //same as arduino
 void setup(){
-  //prints a list of fonts to choose from
-  //String[] fontlist = PFont.list();
-  //printArray(fontlist);
-  
+  //initialize rpm array
+  for(int i = 0; i < NUM_STEPS; i++){
+    RPM_ARRAY[i] = int(LOWER_RPM + (i * STEP_SIZE));
+  }
   size(700,400);  //window size
   cp5 = new ControlP5(this); 
   rpm_timer = new ControlTimer();
@@ -40,15 +44,6 @@ void setup(){
   .setFont(createFont("arial",50))
   .setAutoClear(false);
   
-  /*
-  //control event to send numberbox text to arduino
-  cp5.addBang("Set")
-  .setPosition(180,20)
-  .setSize(40,40)
-  .setFont(createFont("arial",12))
-  .getCaptionLabel().align(CENTER, CENTER)
-  ;
-  */
   
   
   //control event to shut down motor
@@ -101,28 +96,36 @@ void draw(){
   text("Measured RPM",20,330);
 }
 
+int determine_best_rpm(int rpm){
+  for(int i =0; i < NUM_STEPS - 1; i++){
+    if(rpm >= RPM_ARRAY[i] && rpm < RPM_ARRAY[i+1]) return int(RPM_ARRAY[i]);
+  }
+  return 0;
+}
+
+
 void set_data(){
-  state = "motor on";
-  
   String rpmS = cp5.get(Textfield.class,"Target RPM").getText();
   //verify that rpm is a positive integer
   int rpm = parseInt(rpmS);
-  if(rpm > 0){
+  if(rpm >= 125 && rpm <= 5000){
+    int best_fit_rpm = determine_best_rpm(rpm);
+    tf.setText(str(best_fit_rpm));
+    state = "motor on";
     print("Setting RPM to: ");
-    println(rpm);
+    println(best_fit_rpm);
     //command: set       data: rpm
     //create data
     byte[] data = new byte[5];
     data[0] = byte('s');
-    data[1] = byte(rpm & 0xFF);
-    data[2] = byte((rpm >> 8) & 0xFF);
-    data[3] = 0;
-    data[4] = 0;
+    data[1] = byte(best_fit_rpm & 0xFF);
+    data[2] = byte((best_fit_rpm >> 8) & 0xFF);
     //send data
     //port.write(data);
   }
   else{
     println("Invalid RPM");
+    tf.setText("Invalid");
   }
   println();
   
@@ -133,7 +136,7 @@ void STOP(){
   measured_rpm  = -1;
   //command: abort       data: none
   //create data
-  byte data = byte('A');
+  byte data = byte('a');
   //send data
   //port.write(data);
   println("Stopping motor");
@@ -153,15 +156,15 @@ void keyPressed(){
 void request_rpm(){
   //command: request       data: none
   //create data
-  byte data = byte('R');
+  byte data = byte('r');
   //send data
   //port.write(data);
 }
 
 int read_rpm(){
   request_rpm();
-  //buffer contains 4 bytes becuase the arduino will send rpm as an int
-  byte[] inBuffer = new byte[4];
+  //buffer contains 2 bytes becuase the arduino will send rpm as an int
+  byte[] inBuffer = new byte[2];
   //port.readBytes(inBuffer);
   //measured_rpm = int(inBuffer);
   measured_rpm+=1;
